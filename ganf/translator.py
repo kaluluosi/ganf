@@ -58,9 +58,7 @@ async def chat_completion(messages: MessageList):
 
 
 async def translate(
-    content: str,
-    extension: str,
-    locale: str,
+    content: str, extension: str, locale: str, prompt: list[str], max_tokens: int = 100
 ) -> str:
     """将内容翻译成目标语言。
 
@@ -73,13 +71,9 @@ async def translate(
         str: 翻译结果文本
     """
 
-    # 获取ganf配置
-    ganf_config = ganf_config_var.get()
-    openai_config = openai_config_var.get()
-
     translated_txt = ""
 
-    segs = list(segments(content, openai_config.max_tokens))
+    segs = list(segments(content, max_tokens))
 
     result = await tqdm.gather(
         *[
@@ -91,7 +85,7 @@ async def translate(
                             content=START_PROMPT.format(
                                 extension=extension,
                                 locale=locale,
-                                prompts=ganf_config.prompts,
+                                prompts=prompt,
                             ),
                         ),
                         Message(role="user", content=seg),
@@ -129,6 +123,8 @@ async def translate_dir(
         raise ValueError(f"{output_dir_path} is not a directory.")
 
     gitignore = gitignore_var.get()
+    ganf_config = ganf_config_var.get()
+    openai_config = openai_config_var.get()
 
     input_dir_path = os.path.normpath(input_dir_path)
     output_dir_path = os.path.normpath(output_dir_path)
@@ -162,7 +158,13 @@ async def translate_dir(
             continue
         else:
             doc = read_doc(doc_path)
-            txt = await translate(doc, extension=extension, locale=locale)
+            txt = await translate(
+                doc,
+                extension=extension,
+                locale=locale,
+                max_tokens=openai_config.max_tokens,
+                prompt=ganf_config.prompts,
+            )
 
             write_doc(output_doc, txt)
             record.add(doc_path)
@@ -173,17 +175,24 @@ async def translate_file(
     file_path: str,
     output_path: str | None = None,
     locale: str = "zh",
+    prompt: list[str] = [],
 ):
     """
     翻译单个文件
     """
+    openai_config = openai_config_var.get()
+
     extension = os.path.splitext(file_path)[1]
-
+    print(output_path)
     doc = read_doc(file_path)
+    txt = await translate(
+        doc,
+        extension=extension,
+        locale=locale,
+        max_tokens=openai_config.max_tokens,
+        prompt=prompt,
+    )
 
-    txt = await translate(doc, extension=extension, locale=locale)
-
-    output_path = output_path or file_path
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    write_doc(file_path, txt)
+    write_doc(output_path, txt)

@@ -25,7 +25,7 @@ from .config import (
     openai_config_var,
     gitignore_var,
 )
-from .translator import cost_accounting, translate_dir
+from .translator import cost_accounting, translate_dir, translate_file
 
 
 class OrderCommands(click.Group):
@@ -189,7 +189,7 @@ def init(source_dir: str):
 @openai_config_option
 def cost(*args, **kwargs):
     """
-    计算成本
+    计算整个项目翻译成本
     """
     openai_config = openai_config_var.get()
     ganf_config = ganf_config_var.get()
@@ -228,9 +228,9 @@ def cost(*args, **kwargs):
 @openai_config_option
 @click.option("-q", "--quiet", is_flag=True, default=False, help="是否静默执行，不询问成本")
 @click.pass_context
-def translate(ctx: Context, quiet: bool, *args, **kwargs):
+def build(ctx: Context, quiet: bool, *args, **kwargs):
     """
-    翻译
+    根据ganf.toml配置翻译整个项目
     """
     if not quiet:
         ctx.invoke(cost)
@@ -246,3 +246,42 @@ def translate(ctx: Context, quiet: bool, *args, **kwargs):
         await asyncio.gather(*jobs)
 
     asyncio.run(_main())
+
+
+@main.command()
+@openai_config_option
+@click.argument("file", type=click.Path(file_okay=True, dir_okay=False))
+@click.option("-l", "--locale", default="zh", help="翻译到哪个语言")
+@click.option(
+    "-o", "--output", default="", help="输出文件路径，默认在文件名后面加上语言码，例如 README.zh.md。"
+)
+@click.option("-p", "--prompt", multiple=True, help="翻译提示，用来微调翻译质量用")
+@click.option("-q", "--quiet", is_flag=True, default=False, help="是否静默执行，不询问成本")
+def translate(
+    file: str,
+    locale: str = "zh",
+    output: str = "",
+    prompt: list[str] = [],
+    quiet: bool = False,
+    *args,
+    **kwargs,
+):
+    """
+    翻译单个文件
+    """
+    if not quiet:
+        openai_config = openai_config_var.get()
+        cost = openai_config.cost
+
+        doc = read_doc(file)
+        cost, tokens = cost_accounting(doc, cost)
+        click.echo(f"Tokens:{len(tokens)}")
+        click.echo(f"Cost:${cost}")
+        click.confirm("是否继续翻译？", abort=True)
+
+    if not output:
+        basename = os.path.basename(file)
+        name, ext = os.path.splitext(basename)
+        output = f"./{name}.{locale}{ext}"
+
+    asyncio.run(translate_file(file, output, locale, prompt))
