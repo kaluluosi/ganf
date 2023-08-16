@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "ganf"
+version = "0.1.0"
+description = ""
+authors = ["kaluluosi <kaluluosi@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "ganf" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+nltk = "^3.8.1"
+openai = "^0.27.8"
+click = "^8.1.6"
+toml = "^0.10.2"
+tqdm = "^4.66.1"
+pydantic = "^2.1.1"
+types-click = "^7.1.8"
+gitignore-parser = "^0.1.6"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.7.0"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.0"
+
+[tool.poetry.scripts]
+ganf = "ganf.cli:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
