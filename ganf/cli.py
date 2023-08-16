@@ -219,7 +219,6 @@ def cost(*args, **kwargs):
 
     click.echo(f"Total:{total_files}")
     click.echo(f"Tokens:{total_tokens}")
-    click.echo(f"1 Language Cost:${total_cost}")
     click.echo(f"{locale_count} Language Cost:${locale_count*total_cost}")
 
 
@@ -227,10 +226,16 @@ def cost(*args, **kwargs):
 @ganf_config_option
 @gitignore_option
 @openai_config_option
-def translate(*args, **kwargs):
+@click.option("-q", "--quiet", is_flag=True, default=False, help="是否静默执行，不询问成本")
+@click.pass_context
+def translate(ctx: Context, quiet: bool, *args, **kwargs):
     """
     翻译
     """
+    if not quiet:
+        ctx.invoke(cost)
+        click.confirm("是否继续翻译？", abort=True)
+
     ganf_config = ganf_config_var.get()
 
     async def _main():
