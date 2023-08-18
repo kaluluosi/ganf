@@ -196,36 +196,44 @@ def cost(*args, **kwargs):
     ganf_config = ganf_config_var.get()
     ignore = gitignore_var.get()
 
-    record_path = os.path.join(ganf_config.dist_dir, RECORD_FILE)
-    if os.path.exists(record_path):
-        # 输出目录有记录文件就读取
-        record = Record.load(record_path)
-    else:
-        # 输出目录没有记录文件就新建一个记录
-        record = Record()
+    for locale in ganf_config.locales:
+        ouput_dir_path = os.path.join(ganf_config.dist_dir, locale)
+        record_path = os.path.join(ouput_dir_path, RECORD_FILE)
+        if os.path.exists(record_path):
+            # 输出目录有记录文件就读取
+            record = Record.load(record_path)
+        else:
+            # 输出目录没有记录文件就新建一个记录
+            record = Record()
 
-    total_cost = 0
-    total_tokens = 0
-    cost = openai_config.cost
-    files = list(
-        filter(
-            lambda f: not ignore(f) and record.is_modified(f),
-            glob.glob(f"{ganf_config.source_dir}/**/*.*", recursive=True),
+        total_cost = 0
+        total_tokens = 0
+        cost = openai_config.cost
+        files = list(
+            filter(
+                lambda f: not ignore(f) and record.is_modified(f),
+                glob.glob(f"{ganf_config.source_dir}/**/*.*", recursive=True),
+            )
         )
-    )
-    bar = tqdm.tqdm(files, desc="计算成本", postfix="$0")
 
-    total_files = len(files)
+        bar = tqdm.tqdm(files, desc="计算成本", postfix="$0")
 
-    for doc_path in bar:
-        doc = read_doc(doc_path)
-        doc_cost, tokens = cost_accounting(doc, cost)
-        total_cost += doc_cost
-        total_tokens += len(tokens)
-        bar.set_postfix_str(f"${total_cost}")
+        total_files = len(files)
+
+        for doc_path in bar:
+            doc = read_doc(doc_path)
+            doc_cost, tokens = cost_accounting(doc, cost)
+            total_cost += doc_cost
+            total_tokens += len(tokens)
+            bar.set_postfix_str(f"${total_cost}")
+
+        click.echo(
+            f"{locale}| files:{total_files} tokens:{total_tokens} cost:${total_cost}"
+        )
 
     locale_count = len(ganf_config.locales)
 
+    click.echo("-" * 10)
     click.echo(f"Total:{total_files}")
     click.echo(f"Tokens:{total_tokens}")
     click.echo(f"{locale_count} Language Cost:${locale_count*total_cost}")

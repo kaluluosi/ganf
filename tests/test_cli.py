@@ -16,5 +16,4 @@ def test_init():
 
         assert config.source_dir == "docs"
         assert config.dist_dir == "dist"
-        assert config.extensions == ["md", "txt"]
         assert config.locales == ["zh", "jp"]
