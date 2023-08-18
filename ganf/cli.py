@@ -26,7 +26,12 @@ from .config import (
     openai_config_var,
     gitignore_var,
 )
-from .translator import RECORD_FILE, cost_accounting, translate_dir, translate_file
+from .translator import (
+    RECORD_FILE,
+    cost_accounting,
+    translate_dir,
+    translate_file,
+)
 
 
 class OrderCommands(click.Group):
@@ -194,44 +199,53 @@ def cost(*args, **kwargs):
     """
     openai_config = openai_config_var.get()
     ganf_config = ganf_config_var.get()
-    ignore = gitignore_var.get()
+    gitignore = gitignore_var.get()
+
+    cost = openai_config.cost
+
+    locale_count = len(ganf_config.locales)
+    total_cost = 0
+    total_tokens = 0
+    total_files = 0
+
+    doc_paths = glob.glob(
+        os.path.join(ganf_config.source_dir, "**/*.*"), recursive=True
+    )
 
     for locale in ganf_config.locales:
-        ouput_dir_path = os.path.join(ganf_config.dist_dir, locale)
-        record_path = os.path.join(ouput_dir_path, RECORD_FILE)
-        if os.path.exists(record_path):
-            # 输出目录有记录文件就读取
-            record = Record.load(record_path)
-        else:
-            # 输出目录没有记录文件就新建一个记录
-            record = Record()
+        output_dir_path = os.path.join(ganf_config.dist_dir, locale)
+        record = Record.load(os.path.join(output_dir_path, RECORD_FILE)) or Record()
 
-        total_cost = 0
-        total_tokens = 0
-        cost = openai_config.cost
-        files = list(
+        need_translated = list(
             filter(
-                lambda f: not ignore(f) and record.is_modified(f),
-                glob.glob(f"{ganf_config.source_dir}/**/*.*", recursive=True),
+                lambda path: not gitignore(path) and record.is_modified(path), doc_paths
             )
         )
 
-        bar = tqdm.tqdm(files, desc="计算成本", postfix="$0")
-
-        total_files = len(files)
+        locale_cost = 0
+        locale_tokens = 0
+        locale_files = 0
+        bar = tqdm.tqdm(
+            need_translated,
+            desc="计算成本",
+            postfix="$0",
+        )
 
         for doc_path in bar:
             doc = read_doc(doc_path)
             doc_cost, tokens = cost_accounting(doc, cost)
-            total_cost += doc_cost
-            total_tokens += len(tokens)
+            locale_cost += doc_cost
+            locale_tokens += len(tokens)
+            locale_files += 1
             bar.set_postfix_str(f"${total_cost}")
 
-        click.echo(
-            f"{locale}| files:{total_files} tokens:{total_tokens} cost:${total_cost}"
-        )
+        total_cost += locale_cost
+        total_tokens += locale_tokens
+        total_files += locale_files
 
-    locale_count = len(ganf_config.locales)
+        click.echo(
+            f"{locale}| files:{locale_files} tokens:{locale_tokens} cost:${locale_cost}"
+        )
 
     click.echo("-" * 10)
     click.echo(f"Total:{total_files}")

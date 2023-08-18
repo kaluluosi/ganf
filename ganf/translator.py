@@ -59,8 +59,9 @@ async def chat_completion(messages: MessageList):
                 )
             txt = response["choices"][0]["message"]["content"]
             return txt
-        except (Timeout, openai.APIError):
+        except (Timeout, openai.APIError) as e:
             print(f"冷却{openai_config.cooldown}s")
+            print(e)
             await asyncio.sleep(openai_config.cooldown)
 
 
@@ -138,14 +139,9 @@ async def translate_dir(
     output_dir_path = os.path.join(output_dir_path, locale)
 
     record_path = os.path.join(output_dir_path, RECORD_FILE)
-    if os.path.exists(record_path):
-        # 输出目录有记录文件就读取
-        record = Record.load(record_path)
-    else:
-        # 输出目录没有记录文件就新建一个记录
-        record = Record()
+    record = Record.load(record_path) or Record()
 
-    doc_paths = glob.glob(f"{input_dir_path}/**/*.*", recursive=True)
+    doc_paths = glob.glob(os.path.join(input_dir_path, "/**/*.*"), recursive=True)
 
     bar = tqdm(doc_paths, desc=locale)
 
@@ -194,8 +190,9 @@ async def translate_file(
     """
     openai_config = openai_config_var.get()
 
-    extension = os.path.splitext(file_path)[1]
-    print(output_path)
+    basename, extension = os.path.splitext(file_path)
+    output_path = output_path or f"{basename}.{locale}{extension}"
+
     doc = read_doc(file_path)
     txt = await translate(
         doc,

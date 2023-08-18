@@ -24,6 +24,7 @@ black = "^23.7.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.0"
+pytest-asyncio = "^0.21.1"
 
 [tool.poetry.scripts]
 ganf = "ganf.cli:main"
