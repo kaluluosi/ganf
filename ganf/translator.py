@@ -60,7 +60,7 @@ async def chat_completion(messages: MessageList):
             txt = response["choices"][0]["message"]["content"]
             return txt
         except (Timeout, openai.APIError):
-            print(f"冷却{openai_config.cooldown}")
+            print(f"冷却{openai_config.cooldown}s")
             await asyncio.sleep(openai_config.cooldown)
 
 
