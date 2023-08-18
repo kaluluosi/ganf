@@ -19,7 +19,7 @@ def segments(doc: str, max_tokens: int):
     Yields:
         str: 单片文本
     """
-    nltk.download()
+    nltk.download("punkt")
 
     # 先将文章按行切割（切割后换行符没了）
     lines = doc.splitlines()
