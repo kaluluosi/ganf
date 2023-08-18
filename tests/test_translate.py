@@ -1,4 +1,4 @@
-from ganf.translator import MessageList, Message
+from ganf.translator import MessageList, Message, translate
 
 
 def test_messagelist():

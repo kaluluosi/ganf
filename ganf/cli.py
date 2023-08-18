@@ -7,6 +7,7 @@ import os
 
 from click.core import Context
 import tqdm
+from ganf.record import Record
 
 from ganf.utils import read_doc
 from .config import (
@@ -25,7 +26,7 @@ from .config import (
     openai_config_var,
     gitignore_var,
 )
-from .translator import cost_accounting, translate_dir, translate_file
+from .translator import RECORD_FILE, cost_accounting, translate_dir, translate_file
 
 
 class OrderCommands(click.Group):
@@ -195,12 +196,20 @@ def cost(*args, **kwargs):
     ganf_config = ganf_config_var.get()
     ignore = gitignore_var.get()
 
+    record_path = os.path.join(ganf_config.dist_dir, RECORD_FILE)
+    if os.path.exists(record_path):
+        # 输出目录有记录文件就读取
+        record = Record.load(record_path)
+    else:
+        # 输出目录没有记录文件就新建一个记录
+        record = Record()
+
     total_cost = 0
     total_tokens = 0
     cost = openai_config.cost
     files = list(
         filter(
-            lambda f: not ignore(f),
+            lambda f: not ignore(f) and record.is_modified(f),
             glob.glob(f"{ganf_config.source_dir}/**/*.*", recursive=True),
         )
     )
@@ -238,12 +247,10 @@ def build(ctx: Context, quiet: bool, *args, **kwargs):
 
     ganf_config = ganf_config_var.get()
 
+    # 因为openai的并发限制，无法并发太多的请求
     async def _main():
-        jobs = []
         for locale in ganf_config.locales:
-            job = translate_dir(ganf_config.source_dir, ganf_config.dist_dir, locale)
-            jobs.append(job)
-        await asyncio.gather(*jobs)
+            await translate_dir(ganf_config.source_dir, ganf_config.dist_dir, locale)
 
     asyncio.run(_main())
 

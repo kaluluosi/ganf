@@ -47,6 +47,7 @@ class OpenAIConfig(TomlConfig):
     RPM: int = 10
     max_tokens: int = 5000
     cost: float = Field(default=0.0015, description="每1000 tokens费用，单位是美元。")
+    cooldown: int = Field(default=30, description="当openai请求异常的时候冷却等待时间")
 
 
 class GanfConfig(TomlConfig):

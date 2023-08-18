@@ -4,6 +4,7 @@ import os
 import shutil
 from typing import Callable
 import openai
+from openai.error import Timeout
 import nltk
 from pydantic import RootModel, BaseModel
 from tqdm.asyncio import trange, tqdm
@@ -42,19 +43,23 @@ class MessageList(RootModel[list[Message]]):
 async def chat_completion(messages: MessageList):
     openai_config = openai_config_var.get()
 
-    if openai_config.api_type == "azure":
-        response = await openai.ChatCompletion.acreate(
-            deployment_id=openai_config.deployment_id,
-            model=openai_config.model,
-            messages=messages.model_dump(),
-        )
-    else:
-        response = await openai.ChatCompletion.acreate(
-            model=openai_config.model, messages=messages.model_dump()
-        )
-
-    txt = response["choices"][0]["message"]["content"]
-    return txt
+    while True:
+        try:
+            if openai_config.api_type == "azure":
+                response = await openai.ChatCompletion.acreate(
+                    deployment_id=openai_config.deployment_id,
+                    model=openai_config.model,
+                    messages=messages.model_dump(),
+                )
+            else:
+                response = await openai.ChatCompletion.acreate(
+                    model=openai_config.model, messages=messages.model_dump()
+                )
+            txt = response["choices"][0]["message"]["content"]
+            return txt
+        except (Timeout, openai.APIError):
+            print(f"冷却{openai_config.cooldown}")
+            await asyncio.sleep(openai_config.cooldown)
 
 
 async def translate(
@@ -143,6 +148,8 @@ async def translate_dir(
     bar = tqdm(doc_paths, desc=locale)
 
     for doc_path in bar:
+        bar.set_postfix_str(doc_path)
+
         output_doc = doc_path.replace(input_dir_path, output_dir_path, 1)
         extension = os.path.splitext(doc_path)[1]
 
@@ -156,8 +163,11 @@ async def translate_dir(
         if gitignore(doc_path):
             # 被忽略
             continue
+        elif not record.is_modified(doc_path):
+            continue
         else:
             doc = read_doc(doc_path)
+
             txt = await translate(
                 doc,
                 extension=extension,
