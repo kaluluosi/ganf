@@ -141,7 +141,7 @@ async def translate_dir(
     record_path = os.path.join(output_dir_path, RECORD_FILE)
     record = Record.load(record_path) or Record()
 
-    doc_paths = glob.glob(os.path.join(input_dir_path, "/**/*.*"), recursive=True)
+    doc_paths = glob.glob(os.path.join(input_dir_path, "**/*.*"), recursive=True)
 
     bar = tqdm(doc_paths, desc=locale)
 

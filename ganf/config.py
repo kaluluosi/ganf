@@ -45,7 +45,9 @@ class OpenAIConfig(TomlConfig):
         default=os.environ.get("DEPLOYMENT_ID", "your_deployment_id")
     )
     RPM: int = 10
-    max_tokens: int = 5000
+    max_tokens: int = Field(
+        default=1000, description="单次请求最大token数，官方最大8000，但是token数越大响应越慢"
+    )
     cost: float = Field(default=0.0015, description="每1000 tokens费用，单位是美元。")
     cooldown: int = Field(default=30, description="当openai请求异常的时候冷却等待时间")
 
