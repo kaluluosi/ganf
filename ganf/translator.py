@@ -109,6 +109,7 @@ async def translate(
 
 def cost_accounting(doc: str, cost: float):
     """统计翻译成本"""
+    nltk.download()
     tokens = nltk.word_tokenize(doc)
     cost += len(tokens) * (cost / 1000)
     return cost, tokens
