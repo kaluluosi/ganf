@@ -8,6 +8,8 @@
 """
 import nltk
 
+nltk.download("punkt")
+
 
 def segments(doc: str, max_tokens: int):
     """将大文本按max_tokens大小分片
@@ -19,7 +21,6 @@ def segments(doc: str, max_tokens: int):
     Yields:
         str: 单片文本
     """
-    nltk.download("punkt")
 
     # 先将文章按行切割（切割后换行符没了）
     lines = doc.splitlines()

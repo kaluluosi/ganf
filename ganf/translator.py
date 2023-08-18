@@ -25,6 +25,8 @@ START_PROMPT = """
 "[链接名]:(..路径)"碰到这种格式不要修改英文冒号！
 只翻译描述性语言文本，{extension}代码不要做任何修改。
 不要破坏python sphinx文档相关语法标记。
+翻译的结果要能通过sphinx linter
+rst引用标记前后要加空格隔开
 {prompts}
 
 我下面会把整个{extension}文档发送给你，你按照原来文档的格式翻译成{locale}语言返回给我。
@@ -109,7 +111,6 @@ async def translate(
 
 def cost_accounting(doc: str, cost: float):
     """统计翻译成本"""
-    nltk.download("punkt")
     tokens = nltk.word_tokenize(doc)
     cost += len(tokens) * (cost / 1000)
     return cost, tokens

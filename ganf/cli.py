@@ -215,7 +215,7 @@ def cost(*args, **kwargs):
     )
     bar = tqdm.tqdm(files, desc="计算成本", postfix="$0")
 
-    total_files = len(list(files))
+    total_files = len(files)
 
     for doc_path in bar:
         doc = read_doc(doc_path)
