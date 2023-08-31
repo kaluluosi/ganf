@@ -7,11 +7,10 @@
 思路是用生成器的方式，产出文章片段。
 """
 import nltk
+from .exceptions import OutOfMaxTokensError
 
-nltk.download("punkt")
 
-
-def segments(doc: str, max_tokens: int):
+def segments(doc: str, language: str = "english", max_tokens: int = 8000):
     """将大文本按max_tokens大小分片
 
     Args:
@@ -25,20 +24,13 @@ def segments(doc: str, max_tokens: int):
     # 先将文章按行切割（切割后换行符没了）
     lines = doc.splitlines()
 
-    cur_segment = ""
-    total_token = 0
-
-    for line in lines:
-        tokens = nltk.word_tokenize(line)
-        token_count = len(tokens)
-        if total_token + token_count > max_tokens:
-            # 将要超过最大token
-            yield cur_segment + "\n"  # 返回之前缓存的片
-            cur_segment = line + "\n"  # 当前行设置为当前片
-            total_token = token_count
-        else:
-            # 没超过最大token数就继续累加
-            cur_segment += line + "\n"
-            total_token += token_count
-
-    yield cur_segment
+    # 按行处理
+    for lno, line in enumerate(lines):
+        # 按句分割，一句话的token总量怎么样也不可能超过8000，除非是源码。
+        sents = nltk.sent_tokenize(line, language=language)
+        for sent in sents:
+            tokens = nltk.word_tokenize(sent, language=language)
+            if len(tokens) > max_tokens:
+                raise OutOfMaxTokensError(lno, sent, max_tokens)
+            yield sent
+        yield "\n"  # 换行
