@@ -46,7 +46,6 @@ class TomlConfig(BaseModel):
         Raises:
             ValueError: 文件名错误时
         """
-        file_name = self.file_name or file_name
         if file_name:
             with open(file_name, "w") as f:
                 toml.dump(self.model_dump(), f)
