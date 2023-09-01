@@ -18,6 +18,10 @@ GANF_CONF = "ganf.toml"
 META_CONF = "meta.toml"
 
 
+def default_factory(env_var: str, default: str | int = None):
+    return lambda: os.environ.get(env_var, default)
+
+
 class TomlConfig(BaseModel):
     file_name: str | None = Field(default=None, description="配置文件名", exclude=True)
 
@@ -58,15 +62,29 @@ class TomlConfig(BaseModel):
 
 
 class OpenAIConfig(TomlConfig):
-    api_key: str = Field(default=openai.api_key, description="OpenAI API Key")
-    api_base: str = Field(default=openai.api_base, description="OpenAI API Base")
-    api_type: str | Literal["open_ai", "azure"] = Field(
-        default=openai.api_type, description="OpenAI API Type"
+    api_key: str = Field(
+        default_factory=default_factory("OPENAI_API_KEY", openai.api_key),
+        description="OpenAI API Key",
     )
-    api_version: str = Field(default="2023-05-15", description="OpenAI API Version")
-    model: str = Field(default="gpt-3.5-turbo", description="OpenAI Model")
+    api_base: str = Field(
+        default_factory=default_factory("OPENAI_API_BASE", openai.api_base),
+        description="OpenAI API Base",
+    )
+    api_type: str | Literal["open_ai", "azure"] = Field(
+        default_factory=default_factory("OPENAI_API_TYPE", openai.api_type),
+        description="OpenAI API Type",
+    )
+    api_version: str = Field(
+        default_factory=default_factory("OPENAI_API_VERSION", openai.api_version),
+        description="OpenAI API Version",
+    )
+    model: str = Field(
+        default_factory=default_factory("OPENAI_MODEL", "gpt-3.5-turbo"),
+        description="OpenAI Model",
+    )
     deployment_id: str = Field(
-        default="", description="OpenAI Deployment ID (Azure Need)"
+        default_factory=default_factory("OPENAI_DEPLOYMENT_ID"),
+        description="OpenAI Deployment ID (Azure Need)",
     )
     RPM: int = Field(default=10, description="OpenAI RPM")
     max_tokens: int = Field(default=1000, description="OpenAI Max Tokens")
@@ -84,7 +102,7 @@ class GanfConfig(TomlConfig):
 
 class MetaConfig(TomlConfig):
     root: dict[str, str] = Field(
-        default_factory=defaultdict[str, str], description="Root"
+        default_factory=lambda: defaultdict(lambda: None), description="Root"
     )
 
     def update(self, path: str):
