@@ -17,6 +17,8 @@ GANF_CONF = "ganf.toml"
 
 META_CONF = "meta.toml"
 
+GANFIGNORE_FILE = ".ganfignore"
+
 
 def default_factory(env_var: str, default: str | int = None):
     return lambda: os.environ.get(env_var, default)
