@@ -11,6 +11,9 @@ IgnoreFunction = Callable[[str], bool]
 def iter_project(dir: str = "./"):
     old_cwd = os.getcwd()
     os.chdir(dir)
+    if not os.path.exists(GANF_CONF):
+        raise FileNotFoundError(f"{GANF_CONF}未发现配置文件。")
+
     ganf_conf = GanfConfig.load(GANF_CONF)
 
     if os.path.exists(IGNORE_FILE):
