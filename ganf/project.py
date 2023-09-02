@@ -1,40 +1,27 @@
 import os
 import glob
-from typing import Any, Callable, overload
-from ganf.config import GanfConfig, GANF_CONF, MetaConfig, META_CONF, GANFIGNORE_FILE
+from typing import Callable
+from ganf.config import GanfConfig, GANF_CONF
 from gitignore_parser import parse_gitignore
 
 IGNORE_FILE = ".ganfignore"
 IgnoreFunction = Callable[[str], bool]
 
 
-class Project:
-    def __init__(
-        self,
-        ganf_config: GanfConfig | str = GANF_CONF,
-        ignore_file: str = IGNORE_FILE,
-    ) -> None:
-        if isinstance(ganf_config, str):
-            # 如果 `ganf_config` 不存在就抛错
-            self.ganf_config = GanfConfig.load(ganf_config)
-        elif isinstance(ganf_config, GanfConfig):
-            self.ganf_config = ganf_config
+def iter_project(dir: str = "./"):
+    old_cwd = os.getcwd()
+    os.chdir(dir)
+    ganf_conf = GanfConfig.load(GANF_CONF)
 
-        # 设置工作目录
-        dir_path = os.path.dirname(os.path.abspath(ganf_config.file_name))
-        os.chdir(dir_path)
+    if os.path.exists(IGNORE_FILE):
+        ignore = parse_gitignore(IGNORE_FILE)
+    else:
+        ignore = lambda _: False
 
-        # 如果有传ignore文件就加载
-        if ignore_file and os.path.exists(ignore_file):
-            self._ignore = parse_gitignore(ignore_file)
-        else:
-            # 如果都没有就用默认不忽略所有文件
-            self._ignore = lambda _: False
+    globs = glob.glob(ganf_conf.source_dir + "/**/*.*", recursive=True)
+    for file_path in globs:
+        dirname = os.path.dirname(file_path)
+        if not (ignore(file_path) or ignore(dirname)):
+            yield file_path
 
-    def __iter__(self) -> Any:
-        for file_path in glob.glob(
-            f"{self.ganf_config.source_dir}/**/*.*", recursive=True
-        ):
-            dirname = os.path.dirname(file_path)
-            if not self._ignore(file_path) and not self._ignore(dirname):
-                yield os.path.abspath(file_path)
+    os.chdir(old_cwd)
