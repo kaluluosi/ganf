@@ -10,10 +10,10 @@ def test_iter_project():
     ignore1 = r"sample\ignore\ignore.md"
     ignore2 = r"sample\sub_dir\ignore.txt"
 
-    for file_path in iter_project("./tests"):
+    for file_path, locale in iter_project("./tests"):
         assert file_path
 
-    files = list(iter_project("./tests"))
+    files = list(fi[0] for fi in iter_project("./tests"))
 
     assert file1 in files
     assert file2 in files
