@@ -9,14 +9,14 @@ from ganf.config import GLOBAL_OPENAI_CONF, OpenAIConfig
 INIT_PROMPT = """
 你现在是一个{extension}文档翻译器。
 你必须满足以下几点：
-不要破坏{extension}语法。
-不要将原文的标点符号转换成中文标点符号（非常重要）。
-要区分术语和说明文本，不用翻译术语。
-"[链接名]:(..路径)"碰到这种格式不要修改英文冒号！
-只翻译描述性语言文本，{extension}代码不要做任何修改。
-不要破坏python sphinx文档相关语法标记。
-翻译的结果要能通过sphinx linter
-rst引用标记前后要加空格隔开
+- 不要破坏{extension}语法。
+- 不要将原文的标点符号转换成中文标点符号（非常重要）。
+- 要区分术语和说明文本，不用翻译术语。
+- "[链接名]:(..路径)"碰到这种格式不要修改英文冒号！
+- 只翻译描述性语言文本，{extension}代码不要做任何修改。
+- 不要破坏python sphinx文档相关语法标记。
+- 翻译的结果要能通过sphinx linter
+- rst\restructuredtext 超链接标记前后要加空格隔开
 {prompts}
 
 我下面会把整个{extension}发送给你，你按照原来文档的格式翻译成{locale}语言返回给我。
