@@ -64,9 +64,11 @@ class Translator:
     ):
         translated_content: list[str] = []
 
-        segs = segments(content, max_tokens=self.openai_conf.max_tokens)
+        segs = segments(
+            content, max_tokens=self.openai_conf.max_tokens, language=from_locale
+        )
 
-        for seg in tqdm(segs):
+        for seg in tqdm(segs, desc="翻译中..."):
             if not seg.strip():
                 translated_content.append(seg)
                 continue

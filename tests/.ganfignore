@@ -4,3 +4,4 @@ __pycache__
 *.*
 sub_dir/
 !file.md
+!*.rst

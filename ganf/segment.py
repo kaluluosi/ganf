@@ -30,7 +30,7 @@ def segments(doc: str, max_tokens: int, language: str = "english"):
     total_token = 0
 
     for line in lines:
-        tokens = nltk.word_tokenize(line, language=language)
+        tokens = nltk.word_tokenize(line)
         token_count = len(tokens)
         if total_token + token_count > max_tokens:
             # 将要超过最大token

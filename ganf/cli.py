@@ -283,7 +283,7 @@ def build(openai: OpenAIConfig, config: GanfConfig, ignore: IsIgnoreFunction):
                 else:
                     return False
 
-            bar_tran = tqdm(files, desc="翻译...", leave=True)
+            bar_tran = tqdm(files, desc=locale, leave=True)
 
             for file_path in bar_tran:
                 save_to = file_path.replace(source_dir, dist_dir)
