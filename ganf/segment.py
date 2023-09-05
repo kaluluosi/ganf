@@ -7,11 +7,12 @@
 思路是用生成器的方式，产出文章片段。
 """
 import nltk
+from .exceptions import OutOfMaxTokensError
 
 nltk.download("punkt")
 
 
-def segments(doc: str, max_tokens: int):
+def segments(doc: str, max_tokens: int, language: str = "english"):
     """将大文本按max_tokens大小分片
 
     Args:

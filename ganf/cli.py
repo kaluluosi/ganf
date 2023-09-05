@@ -1,37 +1,38 @@
 import asyncio
 import glob
-import sys
-import typing as t
-import click
 import os
-
-from click.core import Context
-import tqdm
-from ganf.record import Record
-
-from ganf.utils import read_doc
-from .config import (
-    GLOBAL_OPENAI_CONFIG_FILE,
+import shutil
+import sys
+import click
+from pydantic import BaseModel
+from typing import Any, Callable
+from contextvars import ContextVar
+from click import Context
+from tqdm import tqdm
+from ganf.config import (
+    GANF_CONF,
+    GLOBAL_OPENAI_CONF,
     GANF_DIR,
-    OPENAI_CONFIG_FILE,
-    GANF_CONFIG,
-    IGNORE_FILE,
-    OPENAI_CONFIG_FILE,
+    META_CONF,
+    OPENAI_CONF,
     GanfConfig,
+    MetaConfig,
     OpenAIConfig,
-    load_ganf_config,
-    load_gitignore,
-    load_openai_config,
-    ganf_config_var,
-    openai_config_var,
-    gitignore_var,
 )
-from .translator import (
-    RECORD_FILE,
-    cost_accounting,
-    translate_dir,
-    translate_file,
-)
+from gitignore_parser import parse_gitignore
+from ganf.translator import Translator
+from ganf.util import read_file, write_file
+
+IGNORE_FILE = ".ganfignore"
+
+IsIgnoreFunction = Callable[[str], bool]
+
+openai_conf_var = ContextVar[OpenAIConfig]("openai_conf_var")
+
+
+class CostInfo(BaseModel):
+    cost: float = 0
+    tokens: int = 0
 
 
 class OrderCommands(click.Group):
@@ -39,46 +40,48 @@ class OrderCommands(click.Group):
         return list(self.commands)
 
 
-def openai_configurate(ctx: Context, param: click.Parameter, value: str) -> None:
-    value = (
-        value if os.path.exists(value) else GLOBAL_OPENAI_CONFIG_FILE
-    )  # 如果本地配置不存在就用全局配置
-
-    # 如果全局都不存在就转而去执行openai配置设置向导了
+def openai_configurate(ctx: Context, param: click.Parameter, value: str) -> Any:
     if not os.path.exists(value):
-        answer = click.confirm(f"没有配置openai.toml，是否现在配置？", default=True, abort=True)
-        if answer:
-            _global = click.confirm("是否使用全局配置？", default=True, abort=True)
-            ctx.invoke(setup, g=_global)
+        click.echo(f"配置文件{value}不存在，转为使用全局配置。")
+        value = GLOBAL_OPENAI_CONF
+        # 如果全局都不存在就转而去执行openai配置设置向导了
+        if not os.path.exists(value):
+            answer = click.confirm(f"没有配置openai.toml，是否现在配置？", default=True, abort=True)
+            if answer:
+                local = click.confirm("是否使用本地配置？(否将创建全局配置)", default=True, abort=True)
+                ctx.invoke(openai, local=local)
 
-        sys.exit()
-    else:
-        load_openai_config(value)
+            sys.exit()
+
+    openai_conf = OpenAIConfig.load(value)
+    return openai_conf
 
 
 openai_config_option = click.option(
     "--openai",
     type=click.Path(exists=False),
-    default=OPENAI_CONFIG_FILE,
+    default=OPENAI_CONF,
     callback=openai_configurate,
     show_default=True,
     help="openai配置文件",
 )
 
 
-def ganf_configurate(ctx: Context, param: click.Parameter, value: str) -> None:
+def ganf_configurate(ctx: Context, param: click.Parameter, value: str) -> Any:
     if not os.path.exists(value):
         click.echo(f"当前目录没有配置文件，请使用 `ganf init` 命令创建配置文件。")
         sys.exit()
-    load_ganf_config(value)
+
+    ctx.default_map = ctx.default_map or {}
+    ganf_config = GanfConfig.load(value)
+    return ganf_config
 
 
 ganf_config_option = click.option(
     "-c",
     "--config",
     type=click.Path(exists=False),
-    default=GANF_CONFIG,
-    is_eager=True,
+    default=GANF_CONF,
     callback=ganf_configurate,
     show_default=True,
     help="配置文件",
@@ -87,230 +90,223 @@ ganf_config_option = click.option(
 
 def ignore_configure(ctx: Context, param: click.Parameter, value: str):
     if os.path.exists(value):
-        load_gitignore(value, os.path.dirname(value))
+        ignore = parse_gitignore(value)
+
+        def _inner_ignore(path: str):
+            dirname = os.path.dirname(path)
+            return ignore(dirname) or ignore(path)
+
+        return _inner_ignore
     else:
         click.echo("没有.ignore文件，将对所有文档进行翻译。")
+        return lambda path: False
 
 
-gitignore_option = click.option(
+ganfignore_option = click.option(
     "-i",
     "--ignore",
     type=click.Path(exists=False),
     default=IGNORE_FILE,
-    is_eager=True,
     callback=ignore_configure,
     show_default=True,
     help="忽略列表",
 )
 
 
+def get_meta_config(path: str):
+    if os.path.exists(path):
+        return MetaConfig.load(path)
+    else:
+        return MetaConfig(file_name=path)
+
+
 @click.group(cls=OrderCommands)
-def main(*args, **kwargs):
+def main():
     """
-    基于openai的批量文档翻译工具
+    Ganf 文档翻译工具
     """
+
+
+def openai_conf_wizard(save_to: str):
+    config = OpenAIConfig()
+    data = config.model_dump()
+    for k, v in data.items():
+        v = click.prompt(k, default=v, show_default=True)
+        data[k] = v
+
+    config = OpenAIConfig.model_validate(data)
+    config.save(save_to)
+    click.echo(save_to)
 
 
 @main.command()
-@click.option("-l", "--local", is_flag=True, help="全局配置")
-def setup(local: bool, *args, **kwargs):
+@click.option("--local", "-l", default=False, flag_value=True, help="全局还是本地")
+def openai(local: bool):
     """
-    配置openai.toml全局配置文件。
+    创建 openai配置文件
     """
-
-    def _create_config(save_to: str):
-        config = OpenAIConfig()
-        data = config.model_dump()
-        for k, v in data.items():
-            v = click.prompt(k, default=v, show_default=True)
-            data[k] = v
-
-        config = OpenAIConfig.model_validate(data)
-        config.save(save_to)
-        click.echo(save_to)
 
     if not local:
         click.echo("正在配置全局配置文件...")
-        if not os.path.exists(GLOBAL_OPENAI_CONFIG_FILE):
+        if not os.path.exists(GLOBAL_OPENAI_CONF):
             os.makedirs(GANF_DIR, exist_ok=True)
         else:
             click.echo("全局配置文件已存在，请删除后再试。")
+            click.echo(GLOBAL_OPENAI_CONF)
             sys.exit()
 
-        _create_config(GLOBAL_OPENAI_CONFIG_FILE)
+        openai_conf_wizard(GLOBAL_OPENAI_CONF)
     else:
         click.echo("正在配置项目配置文件...")
-        if not os.path.exists(OPENAI_CONFIG_FILE):
-            _create_config(OPENAI_CONFIG_FILE)
+        if not os.path.exists(OPENAI_CONF):
+            openai_conf_wizard(OPENAI_CONF)
         else:
             click.echo("项目配置文件已存在，请删除后再试。")
             sys.exit()
 
 
 @main.command()
-@click.argument("source_dir", type=click.Path(exists=True))
-def init(source_dir: str):
+@openai_config_option
+@ganf_config_option
+@ganfignore_option
+def cost(openai: OpenAIConfig, config: GanfConfig, ignore: IsIgnoreFunction):
     """
-    初始化翻译项目
+    计算ganf项目的翻译成本
     """
-    if os.path.exists(GANF_CONFIG):
-        click.echo("ganf 配置文件已存在")
+    # 这一步检查不是必须的，只是做个防御和方便类型检查
+    if config.file_name is None or not os.path.exists(config.file_name):
+        click.echo("ganf.toml不存在")
         sys.exit()
 
-    dist_dir = click.prompt(
-        "输出目录",
-        default="./",
-        show_default=True,
-        type=click.Path(exists=False, dir_okay=True, file_okay=False),
-    )
-    extensions = click.prompt(
-        "扩展名(逗号分隔)",
-        default="md",
-        show_default=True,
-        type=click.Path(exists=False),
-        value_proc=lambda v: v.split(","),
-    )
+    # ganf.toml可能不是在当前目录里，因此要将工作目录切换到ganf.toml所在目录
+    # ganf.toml所在目录绝对路径
+    dirname = os.path.dirname(os.path.abspath(config.file_name))
+    # 将当前工作目录切换到ganf.toml所在目录
+    os.chdir(dirname)
 
-    locales = click.prompt(
-        "翻译语言(逗号分隔)",
-        default="zh",
-        show_default=True,
-        value_proc=lambda v: v.split(","),
-    )
+    # 原文档路径
+    source_dir = config.source_dir
+    # 通配符递归原文档
+    files = glob.glob(os.path.join(source_dir, "**", "*.*"), recursive=True)
 
-    config = GanfConfig(
-        source_dir=source_dir, dist_dir=dist_dir, extensions=extensions, locales=locales
-    )
-    config.save(GANF_CONFIG)
+    bar_locale = tqdm(config.to_locales, desc="所有语言", leave=True)
 
-    # 创建一个默认忽略文件
-    with open(IGNORE_FILE, "w") as f:
-        lines = ["*.*\n", *[f"!*.{extension}\n" for extension in extensions]]
-        f.writelines(lines)
+    total_cost = CostInfo()
 
+    translator = Translator(openai)
+    locale_cost_map: dict[str, CostInfo] = {}
 
-@main.command()
-@ganf_config_option
-@gitignore_option
-@openai_config_option
-def cost(*args, **kwargs):
-    """
-    计算整个项目翻译成本
-    """
-    openai_config = openai_config_var.get()
-    ganf_config = ganf_config_var.get()
-    gitignore = gitignore_var.get()
+    for locale in bar_locale:
+        locale_cost_map[locale] = locale_cost = CostInfo()
 
-    cost = openai_config.cost
+        dist_dir = os.path.join(config.dist_dir, locale)
+        meta_conf_path = os.path.join(dist_dir, META_CONF)
+        meta_config = get_meta_config(meta_conf_path)
 
-    locale_count = len(ganf_config.locales)
-    total_cost = 0
-    total_tokens = 0
-    total_files = 0
+        bar_locale.set_postfix_str(locale)
 
-    doc_paths = glob.glob(
-        os.path.join(ganf_config.source_dir, "**/*.*"), recursive=True
-    )
+        # 过滤掉葫芦和已翻译文件
+        def _filter(path: str):
+            if ignore(path):  # 忽略
+                return False
 
-    for locale in ganf_config.locales:
-        output_dir_path = os.path.join(ganf_config.dist_dir, locale)
-        record = Record.load(os.path.join(output_dir_path, RECORD_FILE)) or Record()
+            if meta_config.is_modified(path):  # 被修改
+                return True
+            else:
+                return False
 
-        need_translated = list(
-            filter(
-                lambda path: not gitignore(path) and record.is_modified(path), doc_paths
-            )
-        )
+        bar_calc = tqdm(filter(_filter, files), desc="计算...", leave=True)
 
-        locale_cost = 0
-        locale_tokens = 0
-        locale_files = 0
-        bar = tqdm.tqdm(
-            need_translated,
-            desc="计算成本",
-            postfix="$0",
-        )
+        for file_path in bar_calc:
+            content = read_file(file_path)
+            c, t = translator.cost_calculate(content)
+            locale_cost.cost += c
+            locale_cost.tokens += t
 
-        for doc_path in bar:
-            doc = read_doc(doc_path)
-            doc_cost, tokens = cost_accounting(doc, cost)
-            locale_cost += doc_cost
-            locale_tokens += len(tokens)
-            locale_files += 1
-            bar.set_postfix_str(f"${total_cost}")
+        total_cost.cost += locale_cost.cost
+        total_cost.tokens += locale_cost.tokens
 
-        total_cost += locale_cost
-        total_tokens += locale_tokens
-        total_files += locale_files
-
-        click.echo(
-            f"{locale}| files:{locale_files} tokens:{locale_tokens} cost:${locale_cost}"
-        )
+    click.echo(f"总翻译语言: {len(config.to_locales)}")
+    click.echo(f"总费用: ${total_cost.cost:.3f}")
+    click.echo(f"总token数: {total_cost.tokens}")
 
     click.echo("-" * 10)
-    click.echo(f"Total:{total_files}")
-    click.echo(f"Tokens:{total_tokens}")
-    click.echo(f"{locale_count} Language Cost:${locale_count*total_cost}")
+
+    for locale, cost in locale_cost_map.items():
+        click.echo(f"{locale} cost:${cost.cost:.3f} tokens:{cost.tokens}")
 
 
 @main.command()
+@openai_config_option
 @ganf_config_option
-@gitignore_option
-@openai_config_option
-@click.option("-q", "--quiet", is_flag=True, default=False, help="是否静默执行，不询问成本")
-@click.pass_context
-def build(ctx: Context, quiet: bool, *args, **kwargs):
+@ganfignore_option
+def build(openai: OpenAIConfig, config: GanfConfig, ignore: IsIgnoreFunction):
     """
-    根据ganf.toml配置翻译整个项目
+    构建ganf翻译
     """
-    if not quiet:
-        ctx.invoke(cost)
-        click.confirm("是否继续翻译？", abort=True)
 
-    ganf_config = ganf_config_var.get()
+    if config.file_name is None or not os.path.exists(config.file_name):
+        click.echo("ganf.toml不存在")
+        sys.exit()
 
-    # 因为openai的并发限制，无法并发太多的请求
-    async def _main():
-        for locale in ganf_config.locales:
-            await translate_dir(ganf_config.source_dir, ganf_config.dist_dir, locale)
+    # ganf.toml可能不是在当前目录里，因此要将工作目录切换到ganf.toml所在目录
+    # ganf.toml所在目录绝对路径
+    dirname = os.path.dirname(os.path.abspath(config.file_name))
+    # 将当前工作目录切换到ganf.toml所在目录
+    os.chdir(dirname)
 
-    asyncio.run(_main())
+    # 原文档绝对路径
+    source_dir = config.source_dir
 
+    # 通配符递归原文档
+    files = glob.glob(os.path.join(source_dir, "**", "*.*"), recursive=True)
 
-@main.command()
-@openai_config_option
-@click.argument("file", type=click.Path(file_okay=True, dir_okay=False))
-@click.option("-l", "--locale", default="zh", help="翻译到哪个语言")
-@click.option(
-    "-o", "--output", default="", help="输出文件路径，默认在文件名后面加上语言码，例如 README.zh.md。"
-)
-@click.option("-p", "--prompt", multiple=True, help="翻译提示，用来微调翻译质量用")
-@click.option("-q", "--quiet", is_flag=True, default=False, help="是否静默执行，不询问成本")
-def translate(
-    file: str,
-    locale: str = "zh",
-    output: str = "",
-    prompt: list[str] = [],
-    quiet: bool = False,
-    *args,
-    **kwargs,
-):
-    """
-    翻译单个文件
-    """
-    if not quiet:
-        openai_config = openai_config_var.get()
-        cost = openai_config.cost
+    translator = Translator(openai)
 
-        doc = read_doc(file)
-        cost, tokens = cost_accounting(doc, cost)
-        click.echo(f"Tokens:{len(tokens)}")
-        click.echo(f"Cost:${cost}")
-        click.confirm("是否继续翻译？", abort=True)
+    def _build():
+        bar_locale = tqdm(config.to_locales, desc="所有语言", leave=True)
 
-    if not output:
-        basename = os.path.basename(file)
-        name, ext = os.path.splitext(basename)
-        output = f"./{name}.{locale}{ext}"
+        for locale in bar_locale:
+            dist_dir = os.path.join(config.dist_dir, locale)
 
-    asyncio.run(translate_file(file, output, locale, prompt))
+            meta_conf_path = os.path.join(dist_dir, META_CONF)
+
+            meta_config = get_meta_config(meta_conf_path)
+            bar_locale.set_postfix_str(locale)
+
+            def _filter(path: str):
+                if ignore(path):  # 忽略
+                    return False
+
+                if meta_config.is_modified(path):  # 被修改
+                    return True
+                else:
+                    return False
+
+            bar_tran = tqdm(files, desc=locale, leave=True)
+
+            for file_path in bar_tran:
+                save_to = file_path.replace(source_dir, dist_dir)
+
+                if not os.path.exists(save_to):
+                    # 目标目录没有这个文件，那么就拷贝过去
+                    dist_dir = os.path.dirname(save_to)
+                    if not os.path.exists(dist_dir):
+                        os.makedirs(dist_dir, exist_ok=True)
+                    shutil.copy(file_path, save_to)
+
+                if _filter(file_path) == False:
+                    continue
+                else:
+                    content = read_file(file_path)
+                    translated_content = translator.translate(
+                        content, config.from_locale, locale, config.prompts
+                    )
+                    # 替换输出目录，保持目录结构
+                    write_file(translated_content, save_to)
+
+                    # 更新md5，并保存
+                    meta_config.update(file_path)
+                    meta_config.save()
+
+    _build()

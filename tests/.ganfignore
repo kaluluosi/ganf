@@ -1,0 +1,7 @@
+ignore/
+ignore.txt
+__pycache__
+*.*
+sub_dir/
+!file.md
+!*.rst

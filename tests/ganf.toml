@@ -1,0 +1,6 @@
+
+source_dir = "sample"
+dist_dir = "dist"
+from_locale = "english"
+to_locales = ["zh"]
+prompts = []

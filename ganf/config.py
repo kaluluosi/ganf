@@ -1,34 +1,106 @@
-import os
+import json
+from typing import Any, Literal
 import openai
 import toml
-from typing import Callable, Literal
-from gitignore_parser import parse_gitignore
+import os
+from collections import defaultdict
 from pydantic import BaseModel, Field
 from contextvars import ContextVar
+from .util import file_md5
 
 USER_DIR = os.path.expanduser("~")
 GANF_DIR = os.path.join(USER_DIR, ".ganf")
-OPENAI_CONFIG_FILE = "openai.toml"
-GLOBAL_OPENAI_CONFIG_FILE = os.path.join(GANF_DIR, OPENAI_CONFIG_FILE)
-GANF_CONFIG = "ganf.toml"
-IGNORE_FILE = ".ganfignore"
 
-GitignoreMethod = Callable[[str], bool]
+OPENAI_CONF = "openai.toml"
+GLOBAL_OPENAI_CONF = os.path.join(GANF_DIR, OPENAI_CONF)
 
-openai_config_var = ContextVar["OpenAIConfig"]("openai_config_var")
-ganf_config_var = ContextVar["GanfConfig"]("ganf_config_var")
-gitignore_var = ContextVar[GitignoreMethod]("gitignore", default=lambda file: False)
+GANF_CONF = "ganf.toml"
+
+META_CONF = "meta.json"
+
+GANFIGNORE_FILE = ".ganfignore"
+
+
+def default_factory(env_var: str, default=None) -> Any:
+    return lambda: os.environ.get(env_var, default)
+
+
+class JsonConfig(BaseModel):
+    file_name: str | None = Field(default=None, description="配置文件名", exclude=True)
+
+    @classmethod
+    def load(cls, file_name: str):
+        """从配置文件加载。加载后将 `file_name` 赋值给 `self.file_name`。
+
+        Args:
+            file_name (str): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        with open(file_name, encoding="utf-8") as f:
+            data = json.load(f)
+
+        config = cls(file_name=file_name, **data)
+        return config
+
+    def save(self, file_name: str | None = None):
+        """保存文件，默认保存回 `load` 时的文件。
+
+        Args:
+            file_name (str | None, optional): 文件名. Defaults to None.
+
+        Raises:
+            ValueError: 文件名错误时
+        """
+        if file_name:
+            with open(file_name, "w", encoding="utf-8") as f:
+                json.dump(self.model_dump(), f, ensure_ascii=False, indent=4)
+            self.file_name = file_name
+        elif self.file_name:
+            with open(self.file_name, "w", encoding="utf-8") as f:
+                json.dump(self.model_dump(), f, ensure_ascii=False, indent=4)
+        else:
+            raise ValueError("file_name is None")
 
 
 class TomlConfig(BaseModel):
-    def save(self, file_path: str):
-        with open(file_path, mode="w") as f:
-            toml.dump(self.model_dump(), f)
+    file_name: str | None = Field(default=None, description="配置文件名", exclude=True)
 
     @classmethod
-    def load(cls, file_path: str):
-        data = toml.load(file_path)
-        return cls.model_validate(data)
+    def load(cls, file_name: str):
+        """从配置文件加载。加载后将 `file_name` 赋值给 `self.file_name`。
+
+        Args:
+            file_name (str): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        with open(file_name, encoding="utf-8") as f:
+            data = toml.load(f)
+
+        config = cls(file_name=file_name, **data)
+        return config
+
+    def save(self, file_name: str | None = None):
+        """保存文件，默认保存回 `load` 时的文件。
+
+        Args:
+            file_name (str | None, optional): 文件名. Defaults to None.
+
+        Raises:
+            ValueError: 文件名错误时
+        """
+        if file_name:
+            with open(file_name, "w", encoding="utf-8") as f:
+                toml.dump(self.model_dump(), f)
+            self.file_name = file_name
+        elif self.file_name:
+            with open(self.file_name, "w", encoding="utf-8") as f:
+                toml.dump(self.model_dump(), f)
+        else:
+            raise ValueError("file_name is None")
 
 
 class OpenAIConfig(TomlConfig):
@@ -36,55 +108,73 @@ class OpenAIConfig(TomlConfig):
     OpenAI配置文件
     """
 
-    api_key: str = Field(default=openai.api_key or "input_your_openai_api_key")
-    api_base: str = Field(default=openai.api_base)
-    api_type: Literal["azure", "open_ai"] = Field(default=openai.api_type)
-    api_version: str = Field(default=openai.api_version)
-    model: str = Field(default=os.environ.get("MODEL", "gpt-3.5-turbo"))
-    deployment_id: str | None = Field(
-        default=os.environ.get("DEPLOYMENT_ID", "your_deployment_id")
+    api_key: str = Field(
+        default_factory=default_factory("OPENAI_API_KEY", openai.api_key),
+        description="OpenAI API Key",
     )
-    RPM: int = 10
-    max_tokens: int = Field(
-        default=1000, description="单次请求最大token数，官方最大8000，但是token数越大响应越慢"
+    api_base: str = Field(
+        default_factory=default_factory("OPENAI_API_BASE", openai.api_base),
+        description="OpenAI API Base",
     )
-    cost: float = Field(default=0.0015, description="每1000 tokens费用，单位是美元。")
-    cooldown: int = Field(default=30, description="当openai请求异常的时候冷却等待时间")
+    api_type: str | Literal["open_ai", "azure"] = Field(
+        default_factory=default_factory("OPENAI_API_TYPE", openai.api_type),
+        description="OpenAI API Type",
+    )
+    api_version: str = Field(
+        default_factory=default_factory("OPENAI_API_VERSION", openai.api_version),
+        description="OpenAI API Version",
+    )
+    model: str = Field(
+        default_factory=default_factory("OPENAI_MODEL", "gpt-3.5-turbo"),
+        description="OpenAI Model",
+    )
+    deployment_id: str = Field(
+        default_factory=default_factory("OPENAI_DEPLOYMENT_ID"),
+        description="OpenAI Deployment ID (Azure Need)",
+    )
+    RPM: int = Field(default=10, description="OpenAI RPM")
+    max_tokens: int = Field(default=1000, description="OpenAI Max Tokens")
+    cost_per_k_token: float = Field(
+        default=0.0015, description="OpenAI Cost Per K Token"
+    )
 
 
 class GanfConfig(TomlConfig):
     """
-    翻译项目配置文件
+    Ganf项目配置文件
     """
 
-    source_dir: str = "docs"
-    dist_dir: str = "./"
-    locales: list[str] = ["zh"]
-    prompts: list[str] = Field(default_factory=list[str], description="额外题词，用来微调翻译结果的")
+    source_dir: str = Field(default="docs", description="Source Directory")
+    dist_dir: str = Field(default="dist", description="Dist Directory")
+    from_locale: str = Field(default="en", description="From Locale")
+    to_locales: list[str] = Field(default=["zh"], description="Locales")
+    prompts: list[str] = Field(default_factory=list, description="Prompts")
 
 
-def load_openai_config(file_path: str, setup: bool = True):
-    config = OpenAIConfig.load(file_path)
-    openai_config_var.set(config)
-    if setup:
-        setup_openai(config)
-    return config
+class MetaConfig(JsonConfig):
+    """
+    记录了翻译进度，文件哈希值的文件
+    """
+
+    root: dict[str, str] = Field(
+        default_factory=lambda: defaultdict(lambda: None), description="Root"
+    )
+
+    def update(self, path: str):
+        self.root[path] = file_md5(path)
+
+    def is_modified(self, path: str):
+        """检测文件是否被修改过
+
+        Args:
+            path (str): 文件路径
+
+        Returns:
+            bool: True修改过，False未修改
+        """
+        if self.root[path]:
+            return file_md5(path) != self.root[path]
+        return True
 
 
-def setup_openai(openai_config: OpenAIConfig):
-    openai.api_key = openai_config.api_key
-    openai.api_base = openai_config.api_base
-    openai.api_version = openai_config.api_version
-    openai.api_type = openai_config.api_type
-
-
-def load_ganf_config(file_path: str):
-    config = GanfConfig.load(file_path)
-    ganf_config_var.set(config)
-    return config
-
-
-def load_gitignore(file_path: str, base_dir: str):
-    gitignore = parse_gitignore(file_path, base_dir)
-    gitignore_var.set(gitignore)
-    return gitignore
+openai_conf_var = ContextVar[OpenAIConfig]("openai_conf_var")
