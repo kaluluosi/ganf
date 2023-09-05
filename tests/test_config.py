@@ -47,7 +47,7 @@ def test_openai_config(tmp_path: str, mocker: pytest_mock.MockerFixture):
 
     config2 = OpenAIConfig.load(file_name)
     mock_load.assert_called_once()
-    open_file.assert_called_once_with(file_name)
+    open_file.assert_called_once_with(file_name, encoding="utf-8")
 
     mock_load.reset_mock()
     open_file.reset_mock()
@@ -55,14 +55,14 @@ def test_openai_config(tmp_path: str, mocker: pytest_mock.MockerFixture):
     mock_dump = mocker.patch("toml.dump")
     config2.save("shit.toml")
     mock_dump.assert_called()
-    open_file.assert_called_with("shit.toml", "w")
+    open_file.assert_called_with("shit.toml", "w", encoding="utf-8")
 
     mock_dump.reset_mock()
     open_file.reset_mock()
 
     config2.save()
     mock_dump.assert_called()
-    open_file.assert_called_with(config2.file_name, "w")
+    open_file.assert_called_with(config2.file_name, "w", encoding="utf-8")
 
     mock_dump.reset_mock()
     open_file.reset_mock()
@@ -72,9 +72,9 @@ def test_openai_config(tmp_path: str, mocker: pytest_mock.MockerFixture):
         config2.save()
 
 
-def test_metaconfig():
+def test_metaconfig(test_cwd):
     config = MetaConfig()
-    file = "tests\sample\sample_en.md"
+    file = r"sample\file.md"
 
     assert config.is_modified(file)
 

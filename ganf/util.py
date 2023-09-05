@@ -13,3 +13,13 @@ def file_md5(file_path: str):
         md5_obj.update(f.read())
         md5_value = md5_obj.hexdigest()
         return md5_value
+
+
+def read_file(path: str):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_file(content: str, path: str):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
