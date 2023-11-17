@@ -7,7 +7,6 @@
 思路是用生成器的方式，产出文章片段。
 """
 import nltk
-from .exceptions import OutOfMaxTokensError
 
 nltk.download("punkt")
 

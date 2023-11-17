@@ -1,11 +1,10 @@
-import asyncio
 import glob
 import os
 import shutil
 import sys
 import click
 from pydantic import BaseModel
-from typing import Any, Callable
+from typing import Any, Callable, List
 from contextvars import ContextVar
 from click import Context
 from tqdm import tqdm
@@ -36,7 +35,7 @@ class CostInfo(BaseModel):
 
 
 class OrderCommands(click.Group):
-    def list_commands(self, ctx: Context) -> list[str]:
+    def list_commands(self, ctx: Context) -> List[str]:
         return list(self.commands)
 
 
@@ -46,7 +45,7 @@ def openai_configurate(ctx: Context, param: click.Parameter, value: str) -> Any:
         value = GLOBAL_OPENAI_CONF
         # 如果全局都不存在就转而去执行openai配置设置向导了
         if not os.path.exists(value):
-            answer = click.confirm(f"没有配置openai.toml，是否现在配置？", default=True, abort=True)
+            answer = click.confirm("没有配置openai.toml，是否现在配置？", default=True, abort=True)
             if answer:
                 local = click.confirm("是否使用本地配置？(否将创建全局配置)", default=True, abort=True)
                 ctx.invoke(openai, local=local)
@@ -69,7 +68,7 @@ openai_config_option = click.option(
 
 def ganf_configurate(ctx: Context, param: click.Parameter, value: str) -> Any:
     if not os.path.exists(value):
-        click.echo(f"当前目录没有配置文件，请使用 `ganf init` 命令创建配置文件。")
+        click.echo("当前目录没有配置文件，请使用 `ganf init` 命令创建配置文件。")
         sys.exit()
 
     ctx.default_map = ctx.default_map or {}
@@ -295,7 +294,7 @@ def build(openai: OpenAIConfig, config: GanfConfig, ignore: IsIgnoreFunction):
                         os.makedirs(dist_dir, exist_ok=True)
                     shutil.copy(file_path, save_to)
 
-                if _filter(file_path) == False:
+                if _filter(file_path) is False:
                     continue
                 else:
                     content = read_file(file_path)
