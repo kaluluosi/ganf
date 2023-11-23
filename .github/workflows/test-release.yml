@@ -14,3 +14,4 @@ jobs:
             - name: 打印事件
               run: |
                 echo "${{ toJSON(github) }}"
+                echo ${{github.ref}}
