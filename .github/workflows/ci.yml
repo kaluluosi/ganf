@@ -1,4 +1,5 @@
-name: CI-${{ github.actor }}-${{github.ref}}
+name: CI
+run-name: CI-${{github.actor}}-${{github.ref_name}}-${{github.event.head_commit}}
 
 on:
     push:
