@@ -1,0 +1,37 @@
+name: C-Deploy-持续部署
+run-name: C-Deploy-${{github.actor}}-${{github.ref_name}}-${{github.event.head_commit}}
+
+on:
+    release: 
+        types: [published, prereleased]
+
+
+jobs:
+
+    build:
+        name: Build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Buiding
+              uses: echo "打包中..."
+
+
+    deploy-prereleased:
+        needs: [build]
+        name: Deploy to production
+        if: github.event.release.prerelease
+        environment: staging
+        runs-on: ubuntu-latest
+        steps:
+            - name: Deploy to staging
+              run: echo "Deploy to staging"
+
+    deploy-release:
+        needs: [build]
+        name: Deploy to production  
+        if: github.event.release.prerelease == false
+        environment: production
+        runs-on: ubuntu-latest
+        steps:
+            - name: Deploy to production
+              run: echo "Deploy to production"
