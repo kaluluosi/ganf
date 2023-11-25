@@ -1,0 +1,39 @@
+name: CD-持续交付
+run-name: CD-${{github.actor}}-${{github.ref_name}}-${{github.event.head_commit}}
+
+on:
+    push:
+        paths-ignore:
+            - ".github/**" # 忽略掉GitHub目录
+        
+        branches:
+            - main # 只触发main分支
+
+    pull_request:
+        paths-ignore:
+            - ".github/**"
+
+        branches:
+            - main
+
+    workflow_call:
+
+jobs:
+    test:
+        uses: "./.github/workflows/ci.yml"
+
+    build-and-delivery:
+        name: 打包并提交assetbundle
+        runs-on: ubuntu-latest
+        needs: test
+        environment: development
+        steps:
+            - name: build
+              run: |
+                echo build
+                echo "mode ${MODE}"
+                echo "asset server ${ASSET_SERVER}"
+                echo "deploy token ${{ secrets.DEPLOY_TOKEN }}"
+
+
+        
