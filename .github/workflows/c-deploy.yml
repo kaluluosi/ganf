@@ -13,7 +13,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Buiding
-              uses: echo "打包中..."
+              run: echo "打包中..."
 
 
     deploy-prereleased:
