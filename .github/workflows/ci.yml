@@ -1,0 +1,26 @@
+name: CI-${{ github.actor }}-${{github.ref}}
+
+on:
+    push:
+        paths-ignore:
+            - ".github/**" # 忽略掉GitHub目录
+
+    pull_request:
+        paths-ignore:
+            - ".github/**"
+
+    workflow_call:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              run:  echo "Checkout"
+
+            - name: Setup Python
+              run: echo "Setup Python"
+
+            - name: Run Test
+              run: echo "Run Test"
+
