@@ -1,5 +1,5 @@
 name: C-Deploy-持续部署
-run-name: C-Deploy-${{github.actor}}-${{github.ref_name}}-${{github.event.head_commit}}
+run-name: C-Deploy-${{github.actor}}-${{github.ref_name}}
 
 on:
     release: 
