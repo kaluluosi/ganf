@@ -8,6 +8,8 @@ from ganf.config import OPENAI_CONF
 # hehe
 # dd
 
+# FIXME: 1.0.1 修复bug
+
 
 def test_ignore(test_cwd):
     ignore = parse_gitignore(".ganfignore")
