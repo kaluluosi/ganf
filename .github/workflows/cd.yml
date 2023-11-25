@@ -31,8 +31,8 @@ jobs:
             - name: build
               run: |
                 echo build
-                echo "mode ${MODE}"
-                echo "asset server ${ASSET_SERVER}"
+                echo "mode ${{vars.MODE}}"
+                echo "asset server ${{vars.ASSET_SERVER}}"
                 echo "deploy token ${{ secrets.DEPLOY_TOKEN }}"
 
 
