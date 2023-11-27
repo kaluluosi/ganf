@@ -1,0 +1,10 @@
+
+name: test-action
+description: just for test
+
+runs:
+  using: composite
+  steps:
+    - name: test
+      shell: bash
+      run: echo "test action"
